@@ -8,7 +8,7 @@ namespace KafkaLesson.Homework;
 public class KafkaTests
 {
     private const string TopicName = "kafka.homework.v1";
-    
+
     [Test]
     public async Task ConsumedEventsOrderTest()
     {
@@ -16,18 +16,19 @@ public class KafkaTests
         var kafkaConnectionString = kafkaContainer.GetConnectionString();
 
         var eventsForProduce = InitialData.GetEvents();
-        
+
         var producer = CreateProducer(TopicName, kafkaConnectionString);
         foreach (var ev in eventsForProduce)
         {
             await producer.Publish(ev, CancellationToken.None);
+            Console.WriteLine($"Produced event: {ev}");
         }
 
         using var consumerHost = new ConsumerHost(TopicName, kafkaConnectionString);
         await consumerHost.StartAsync();
 
         await WaitForConsume(eventsForProduce.Count);
-        
+
         Asserts.AssertProcessedEvents();
     }
 
@@ -35,9 +36,9 @@ public class KafkaTests
     {
         var config = new ProducerConfig { ConnectionString = kafkaConnectionString };
         config.ApplyKafkaOptions(config);
-        
+
         return new ProducerBuilder(
-                config: config, 
+                config: config,
                 c => c.AddEventMapping<TestEvent>(
                     getKey: e => Encoding.ASCII.GetBytes(e.Id.ToString()),
                     topic: topicName))
@@ -46,8 +47,18 @@ public class KafkaTests
 
     private async Task WaitForConsume(int expectedConsumedEventCount)
     {
+        while (true)
+        {
+            var consumedEvents = EventStorage.Instance.GetConsumedEvents();
+            if (consumedEvents.Count >= expectedConsumedEventCount)
+            {
+                Console.WriteLine($"All {expectedConsumedEventCount} events consumed.");
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
         await Task.CompletedTask;
-        
-        // TODO add logic
     }
 }
